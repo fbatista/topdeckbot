@@ -1,16 +1,18 @@
-const auth = process.env.DISCORD_TOKEN;
+import * as fs from 'fs';
 import Discord from 'discord.js';
 import Tournament from './tournament.js';
 
 const client = new Discord.Client();
+const auth = {};
+const guildMap = {};
+
+fs.promises.readFile('auth.json', 'utf8')
+  .then((contents) => (auth.discordToken = JSON.parse(contents).discordToken))
+  .then(() => client.login(auth.discordToken));
 
 client.once('ready', () => {
   console.log('Ready!');
 });
-
-client.login(auth.token);
-
-const guildMap = {};
 
 client.on('ready', () => {
   console.log('connected');
