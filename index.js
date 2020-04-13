@@ -3,12 +3,14 @@ import Discord from 'discord.js';
 import Tournament from './tournament.js';
 
 const client = new Discord.Client();
-const auth = {};
+const config = {};
 const guildMap = {};
 
-fs.promises.readFile('auth.json', 'utf8')
-  .then((contents) => (auth.discordToken = JSON.parse(contents).discordToken))
-  .then(() => client.login(auth.discordToken));
+(async () => {
+  const contents = await fs.promises.readFile('config.json', 'utf8');
+  Object.assign(config, JSON.parse(contents));
+  client.login(config.auth);
+})()
 
 client.once('ready', () => {
   console.log('Ready!');
@@ -21,13 +23,13 @@ client.on('ready', () => {
       guildMap[g.id] = guildMap[g.id] || {};
       guildMap[g.id].tournament = new Tournament();
 
-      let staffRole = g.roles.cache.find((role) => role.name === 'Staff');
+      let staffRole = g.roles.cache.find((role) => role.name === config.role);
       if (staffRole) {
         guildMap[g.id].role = staffRole.id;
       } else {
         g.roles.create({
           data: {
-            name: 'Staff',
+            name: config.role,
             color: 'YELLOW',
           },
           reason: 'The bot needs a Staff role for special actions',
@@ -44,7 +46,7 @@ client.on('ready', () => {
 
 const allowMentions = { allowedMentions: { parse: ['users'] } };
 
-client.on('message', message => {
+client.on('message', async message => {
   console.log(message.content);
   const guild = guildMap[message.guild.id];
 
@@ -66,8 +68,10 @@ client.on('message', message => {
   //   debitando a lista de jogadores inscritos sob a forma de pairings para a primeira ronda)
   if (message.content === '!start' && message.member.roles.cache.has(guild.role)) {
     const [header, rows] = guild.tournament.start();
-    message.channel.send(header, allowMentions)
-      .then(() => rows.forEach((r) => message.channel.send(r, allowMentions)));
+    await message.channel.send(header, allowMentions)
+    for (const row of rows) {
+      await message.channel.send(row, allowMentions);
+    }
   }
 
   // - !result [1-0-0, 2-0-0 , etc] (JOGADOR o jogador envia o resultado para o bot, o bot fica com o
@@ -76,33 +80,29 @@ client.on('message', message => {
   if (message.content.startsWith('!result')) {
     const [_, result] = message.content.split(' ');
     const [output, opponent] = guild.tournament.submitResult(message.author, ...(result.split('-')));
-    message.channel.send(output, allowMentions)
-      .then((reply) => {
-        const filter = (reaction, user) => (user.id === opponent.id);
-        reply.react('👍')
-          .then(() => reply.react('👎'))
-          .then(() => {
-            const collector = reply.createReactionCollector(filter, { time: 20000, max: 1 })
-            collector.on('collect', (reaction, user) => {
-              if (reaction.emoji.name === '👍') {
-                message.channel.send(guild.tournament.confirmResult(opponent), allowMentions)
-              }
-              if (reaction.emoji.name === '👎') {
-                message.channel.send(guild.tournament.denyResult(opponent), allowMentions)
-              }
-            });
-            collector.on('end', () => {
-              console.log(`auto-confirmed result - ${guild.tournament.confirmResult(opponent)}`);
-            });
-          })
-      });
+    const filter = (reaction, user) => (user.id === opponent.id);
+    const reply = await message.channel.send(output, allowMentions);
+    await reply.react('👍');
+    await reply.react('👎');
+    const collector = reply.createReactionCollector(filter, { time: 20000, max: 1 })
+
+    collector.on('collect', (reaction, user) => {
+      if (reaction.emoji.name === '👍') {
+        message.channel.send(guild.tournament.confirmResult(opponent), allowMentions)
+      }
+      if (reaction.emoji.name === '👎') {
+        message.channel.send(guild.tournament.denyResult(opponent), allowMentions)
+      }
+    });
   }
 
   // - !next (ORGANIZADOR, o torneio avanca para a proxima ronda, se houver resultados em falta,
   //   sao automaticamente empate. Se a ronda anterior for a ultima, o torneio acaba e mostra os standings finais)
   if (message.content === '!next' && message.member.roles.cache.has(guild.role)) {
     const [header, rows] = guild.tournament.nextRound();
-    message.channel.send(header, allowMentions)
-      .then(() => rows.forEach((r) => message.channel.send(r, allowMentions)));
+    await message.channel.send(header, allowMentions)
+    for (const row of rows) {
+      await message.channel.send(row, allowMentions);
+    }
   }
 });

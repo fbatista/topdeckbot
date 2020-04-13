@@ -41,13 +41,10 @@ function Player(playerData) {
 
 function Pairing(...players) {
   const [p1, p2] = players;
-  const opponents = {
-    [p1]: p2,
-    [p2]: p1,
-  }
+  const opponents = new Map([[p1, p2],[p2, p1]]);
   const bye = players.length === 1;
   return {
-    players: new Map(players.map((p) => [p.data.id, { player: p, opponent: opponents[p], wins: bye ? 2 : 0 }])),
+    players: new Map(players.map((p) => [p.data.id, { player: p, opponent: opponents.get(p), wins: bye ? 2 : 0 }])),
     draws: 0,
     state: bye ? 'confirmed' : 'unsubmitted',
     bye
@@ -103,12 +100,12 @@ function Tournament() {
         r = r + 1;
       }
 
-      this.generateInitialPairings();
+      this.generatePairings(['random']);
 
       // output Initial info
       let header = `Number of players: ${this.players.length}\n` +
         `Number of rounds: ${this.rounds.length}\n\n`+
-        `Pairings for ${this.currentRound + 1}:`
+        `Pairings for Round ${this.currentRound + 1}:`
 
       return [header, this.outputPairings(this.currentRound)];
     },
@@ -129,7 +126,7 @@ function Tournament() {
       return output;
     },
 
-    submitResult(playerData, win, loss, draw) {
+    submitResult(playerData, win = 2, loss = 0, draw = 0) {
       const pairing = this.findPairing(playerData);
       console.log(pairing);
       if (!pairing) {
@@ -223,7 +220,7 @@ function Tournament() {
       this.currentRound = this.currentRound + 1;
       // pair players according to tiebreakers
 
-      this.rounds[this.currentRound].pairings = this.generatePairings([
+      this.generatePairings([
         'matchPoints',
         'opponentsMatchWinPercentage',
         'gameWinPercentage',
@@ -236,7 +233,7 @@ function Tournament() {
     },
 
     generatePairings(tiebreakers) {
-      const sortedPlayers = this.players.sort((a, b) => {
+      const sortedPlayers = this.players.slice().sort((a, b) => {
         function innerSort(i) {
           if (i >= tiebreakers.length) {
             return 0;
@@ -256,10 +253,10 @@ function Tournament() {
 
       while(sortedPlayers.length > 0) {
         const player = sortedPlayers.shift();
-        if (sortedPlayers.length == 0) {
+        const i = sortedPlayers.findIndex((p) => !player.metadata.opponents.includes(p));
+        if (i === -1) {
           this.rounds[this.currentRound].pairings.push(new Pairing(player));
         } else {
-          const i = sortedPlayers.findIndex((p) => !player.opponents.includes(p));
           const [opponent] = sortedPlayers.splice(i, 1);
           player.metadata.opponents.push(opponent);
           opponent.metadata.opponents.push(player);
