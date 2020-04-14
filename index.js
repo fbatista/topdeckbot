@@ -47,7 +47,6 @@ client.on('ready', () => {
 const allowMentions = { allowedMentions: { parse: ['users'] } };
 
 client.on('message', async message => {
-  console.log(message.content);
   const guild = guildMap[message.guild.id];
 
   // - !checkin (ORGANIZER - se nao houver torneio a decorrer, cria um torneio)
@@ -102,9 +101,9 @@ client.on('message', async message => {
     }
   }
 
-  if (message.content.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf('marcia') !== -1) {
+  if (config.marcia && config.marcia.length > 0 && message.content.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf('marcia') !== -1) {
     const url = config.marcia[Math.floor(Math.random() * (config.marcia.length + 1))];
-    const emb = new Discord.MessageEmbed().setImage(url);
+    const emb = new Discord.MessageEmbed().setTitle('Zorca!').setImage(url);
     message.channel.send(emb);
   }
 });
