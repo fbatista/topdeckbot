@@ -50,10 +50,6 @@ client.on('message', async message => {
   console.log(message.content);
   const guild = guildMap[message.guild.id];
 
-  if (message.content === 'marcia') {
-    message.channel.send('ZORCA!');
-  }
-
   // - !checkin (ORGANIZER - se nao houver torneio a decorrer, cria um torneio)
   if (message.content === '!checkin' && message.member.roles.cache.has(guild.role)) {
     message.channel.send(guild.tournament.checkin());
@@ -104,5 +100,11 @@ client.on('message', async message => {
     for (const row of rows) {
       await message.channel.send(row, allowMentions);
     }
+  }
+
+  if (message.content.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf('marcia') !== -1) {
+    const url = config.marcia[Math.floor(Math.random() * (config.marcia.length + 1))];
+    const emb = new Discord.MessageEmbed().setImage(url);
+    message.channel.send(emb);
   }
 });
