@@ -68,6 +68,22 @@ function Tournament() {
       'random'
     ],
 
+    standings(){
+      if(this.state !== 'not_running'){
+        const standings = this.sortPlayers(this.tiebreakers).map((p, i) => {
+          const medal = [': 🥇', ': 🥈', ': 🥉'];
+          return `#${i+1}${i < medal.length ? medal[i] : ''}`+
+            ` - (${p.data} - ${p.metadata.points.match} / `+
+            `${(p.metadata.percentage.match.opponent * 100).toFixed(2)}% / `+
+            `${(p.metadata.percentage.game.self * 100).toFixed(2)}% / `+
+            `${(p.metadata.percentage.game.opponent * 100).toFixed(2)}%)`;
+        });
+        return ['Standings (Match points / OMW% / GW% / OGW%):', standings];
+
+      }else return 'I have no tournaments running right now.';
+ 
+    },
+
     checkin() {
       if (this.state === 'not_running') {
         this.state = 'checkin'
@@ -242,16 +258,9 @@ function Tournament() {
 
       // increment round
       if (this.currentRound + 1 >= this.rounds.length) {
-        const standings = this.sortPlayers(this.tiebreakers).map((p, i) => {
-          const medal = [': 🥇', ': 🥈', ': 🥉'];
-          return `#${i+1}${i < medal.length ? medal[i] : ''}`+
-            ` - (${p.data} - ${p.metadata.points.match} / `+
-            `${(p.metadata.percentage.match.opponent * 100).toFixed(2)}% / `+
-            `${(p.metadata.percentage.game.self * 100).toFixed(2)}% / `+
-            `${(p.metadata.percentage.game.opponent * 100).toFixed(2)}%)`;
-        })
+        const standings = this.standings();
         this.resetTournament();
-        return ['Tournament is over!\nFinal Standings (Match points / OMW% / GW% / OGW%):', standings];
+        return ['Tournament is over!\n', standings];
       }
       this.currentRound = this.currentRound + 1;
 

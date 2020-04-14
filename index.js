@@ -60,6 +60,15 @@ client.on('message', async message => {
     message.channel.send(guild.tournament.add(message.author), allowMentions);
   }
 
+  // - !standings (ANY - mostra standings atuais)
+  if (message.content === '!standings' && message.member.roles.cache.has(guild.role)) {
+    const [header, rows] = guild.tournament.standings();
+    await message.channel.send(header, allowMentions)
+    for (const row of rows) {
+      await message.channel.send(row, allowMentions);
+    }
+  }
+
   // - !start (ORGANIZER - se o torneio estiver em modo checkin, passa para o modo playing,
   //   debitando a lista de jogadores inscritos sob a forma de pairings para a primeira ronda)
   if (message.content === '!start' && message.member.roles.cache.has(guild.role)) {
