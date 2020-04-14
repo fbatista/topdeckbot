@@ -7,6 +7,9 @@ function Player(playerData) {
         game: 0,
         match: 0,
       },
+      played: {
+        games: 0,
+      },
       percentage: {
         match: {
           self: 0,
@@ -24,8 +27,8 @@ function Player(playerData) {
     gameWinPercentage() { return this.metadata.percentage.game.self },
     opponentsGameWinPercentage() { return this.metadata.percentage.game.opponent },
     random() { return this.metadata.seed },
-    updateWinPercentage(type, roundsPlayed) {
-      this.metadata.percentage[type].self = Math.max(this.metadata.points[type] / roundsPlayed * 3, 0.33);
+    updateWinPercentage(type, played) {
+      this.metadata.percentage[type].self = Math.max(this.metadata.points[type] / (played * 3), 0.33);
     },
     updateOpponentWinPercentage(type) {
       this.metadata.percentage[type].opponent = (
@@ -57,6 +60,13 @@ function Tournament() {
     players: [],
     rounds: [],
     currentRound: 0,
+    tiebreakers: [
+      'matchPoints',
+      'opponentsMatchWinPercentage',
+      'gameWinPercentage',
+      'opponentsGameWinPercentage',
+      'random'
+    ],
 
     checkin() {
       if (this.state === 'not_running') {
@@ -70,6 +80,10 @@ function Tournament() {
     add(playerData) {
       if (this.findPlayer(playerData)) {
         return `${playerData} already in the tournament!`;
+      }
+
+      if (this.state !== 'checkin') {
+        return 'Tournament already started. Sorry!';
       }
 
       this.players.push(new Player(playerData));
@@ -132,20 +146,22 @@ function Tournament() {
       if (!pairing) {
         return `Sorry ${playerData}, is not playing.`;
       }
-
-      if (pairing.state === 'unsubmitted') {
-        pairing.players.get(playerData.id).wins = win;
-        pairing.players.get(pairing.players.get(playerData.id).opponent.data.id).wins = loss;
-        pairing.draws = draw;
-        pairing.state = 'submitted';
-        let output = `Result submitted by ${playerData}:\n`
-        output = output + `${playerData} wins: ${win}\n`;
-        output = output + `${pairing.players.get(playerData.id).opponent.data} wins: ${loss}\n`;
-        output = output + `Draws: ${draw}\n`;
-        output = output + `${pairing.players.get(playerData.id).opponent.data} please confirm.`;
-        return [output, pairing.players.get(playerData.id).opponent.data];
+      try {
+        if (pairing.state === 'unsubmitted') {
+          pairing.players.get(playerData.id).wins = Number.parseInt(win, 10);
+          pairing.players.get(pairing.players.get(playerData.id).opponent.data.id).wins = Number.parseInt(loss, 10);
+          pairing.draws = Number.parseInt(draw, 10);
+          pairing.state = 'submitted';
+          let output = `Result submitted by ${playerData}:\n`
+          output = output + `${playerData} wins: ${win}\n`;
+          output = output + `${pairing.players.get(playerData.id).opponent.data} wins: ${loss}\n`;
+          output = output + `Draws: ${draw}\n`;
+          output = output + `${pairing.players.get(playerData.id).opponent.data} please confirm.`;
+          return [output, pairing.players.get(playerData.id).opponent.data];
+        }
+      } catch (e) {
+        return 'Error';
       }
-      return 'Error';
     },
 
     confirmResult(playerData) {
@@ -184,6 +200,7 @@ function Tournament() {
     },
 
     updateScore(participant, gameWins, gameDraws, matchWins, matchDraws) {
+      participant.player.metadata.played.games = participant.player.metadata.played.games + gameWins + gameDraws;
       participant.player.metadata.points.game = participant.player.metadata.points.game + (gameWins * 3) + gameDraws;
       participant.player.metadata.points.match = participant.player.metadata.points.match + (matchWins * 3) + matchDraws;
     },
@@ -202,14 +219,21 @@ function Tournament() {
       this.updateScore(p2, p2.wins, pairing.draws, p2.wins > p1.wins ? 1 : 0, p2.wins === p1.wins ? 1 : 0);
     },
 
+    resetTournament() {
+      this.state = 'not_running';
+      this.players = [];
+      this.rounds = [];
+      this.currentRound = 0;
+    },
+
     nextRound() {
       // gather results
       this.rounds[this.currentRound].pairings.forEach((p) => this.updateScores(p));
 
       // store each players tiebreakers
       this.players.forEach((p) => {
-        p.updateWinPercentage('match', this.currentRound);
-        p.updateWinPercentage('game', this.currentRound);
+        p.updateWinPercentage('match', this.currentRound+1);
+        p.updateWinPercentage('game', p.metadata.played.games);
       });
       this.players.forEach((p) => {
         p.updateOpponentWinPercentage('match');
@@ -217,23 +241,32 @@ function Tournament() {
       });
 
       // increment round
+      if (this.currentRound + 1 >= this.rounds.length) {
+        const standings = this.sortPlayers(this.tiebreakers).map((p, i) => {
+          const medal = [': 🥇', ': 🥈', ': 🥉'];
+          return `#${i+1}${i < medal.length ? medal[i] : ''}`+
+            ` - (${p.data} - ${p.metadata.points.match} / `+
+            `${(p.metadata.percentage.match.opponent * 100).toFixed(2)}% / `+
+            `${(p.metadata.percentage.game.self * 100).toFixed(2)}% / `+
+            `${(p.metadata.percentage.game.opponent * 100).toFixed(2)}%)`;
+        })
+        this.resetTournament();
+        return ['Tournament is over!\nFinal Standings (Match points / OMW% / GW% / OGW%):', standings];
+      }
       this.currentRound = this.currentRound + 1;
-      // pair players according to tiebreakers
 
-      this.generatePairings([
-        'matchPoints',
-        'opponentsMatchWinPercentage',
-        'gameWinPercentage',
-        'opponentsGameWinPercentage',
-        'random'
-      ]);
+      // pair players according to tiebreakers
+      this.generatePairings(this.tiebreakers);
+
       // output pairings
-      const header = `Pairings for ${this.currentRound + 1}:`
-      return [header, this.outputPairings(this.currentRound)];
+      return [
+        `Pairings for ${this.currentRound + 1}:`,
+        this.outputPairings(this.currentRound)
+      ];
     },
 
-    generatePairings(tiebreakers) {
-      const sortedPlayers = this.players.slice().sort((a, b) => {
+    sortPlayers(tiebreakers) {
+      return this.players.slice().sort((a, b) => {
         function innerSort(i) {
           if (i >= tiebreakers.length) {
             return 0;
@@ -250,6 +283,10 @@ function Tournament() {
         }
         return innerSort(0);
       });
+    },
+
+    generatePairings(tiebreakers) {
+      const sortedPlayers = this.sortPlayers(tiebreakers);
 
       while(sortedPlayers.length > 0) {
         const player = sortedPlayers.shift();
