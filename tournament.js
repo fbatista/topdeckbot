@@ -257,9 +257,9 @@ function Tournament() {
 
       // increment round
       if (this.currentRound + 1 >= this.rounds.length) {
-        const standings = this.standings();
+        const [header, standings] = this.standings();
         this.resetTournament();
-        return ['Tournament is over!', standings];
+        return ['Tournament is over!\nFinal ' + header, standings];
       }
       this.currentRound = this.currentRound + 1;
 
