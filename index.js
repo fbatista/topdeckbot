@@ -47,12 +47,7 @@ client.on('ready', () => {
 const allowMentions = { allowedMentions: { parse: ['users'] } };
 
 client.on('message', async message => {
-  console.log(message.content);
   const guild = guildMap[message.guild.id];
-
-  if (message.content === 'marcia') {
-    message.channel.send('ZORCA!');
-  }
 
   // - !checkin (ORGANIZER - se nao houver torneio a decorrer, cria um torneio)
   if (message.content === '!checkin' && message.member.roles.cache.has(guild.role)) {
@@ -62,6 +57,15 @@ client.on('message', async message => {
   // - !join (PLAYER - o jogador junta-se ao torneio a decorrer)
   if (message.content === '!join') {
     message.channel.send(guild.tournament.add(message.author), allowMentions);
+  }
+
+  // - !standings (ANY - mostra standings atuais)
+  if (message.content === '!standings' && message.member.roles.cache.has(guild.role)) {
+    const [header, rows] = guild.tournament.standings();
+    await message.channel.send(header, allowMentions)
+    for (const row of rows) {
+      await message.channel.send(row, allowMentions);
+    }
   }
 
   // - !start (ORGANIZER - se o torneio estiver em modo checkin, passa para o modo playing,
@@ -104,5 +108,11 @@ client.on('message', async message => {
     for (const row of rows) {
       await message.channel.send(row, allowMentions);
     }
+  }
+
+  if (config.marcia && config.marcia.length > 0 && message.content.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf('marcia') !== -1) {
+    const url = config.marcia[Math.floor(Math.random() * (config.marcia.length + 1))];
+    const emb = new Discord.MessageEmbed().setTitle('Zorca!').setImage(url);
+    message.channel.send(emb);
   }
 });

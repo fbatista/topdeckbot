@@ -50,7 +50,13 @@ function Pairing(...players) {
     players: new Map(players.map((p) => [p.data.id, { player: p, opponent: opponents.get(p), wins: bye ? 2 : 0 }])),
     draws: 0,
     state: bye ? 'confirmed' : 'unsubmitted',
-    bye
+    bye,
+    toString() {
+      if(this.bye) {
+        return `${this.players.values().next().value.player.data} -- BYE`;
+      }
+      return Array.from(this.players, ([key, pairingData]) => pairingData.player.data).join(' vs ');
+    }
   };
 }
 
@@ -67,6 +73,21 @@ function Tournament() {
       'opponentsGameWinPercentage',
       'random'
     ],
+
+    standings(){
+      if(this.state !== 'not_running'){
+        const standings = this.sortPlayers(this.tiebreakers).map((p, i) => {
+          const medal = [': 🥇', ': 🥈', ': 🥉'];
+          return `#${i+1}${i < medal.length ? medal[i] : ''}`+
+            ` - (${p.data} - ${p.metadata.points.match} / `+
+            `${(p.metadata.percentage.match.opponent * 100).toFixed(2)}% / `+
+            `${(p.metadata.percentage.game.self * 100).toFixed(2)}% / `+
+            `${(p.metadata.percentage.game.opponent * 100).toFixed(2)}%)`;
+        });
+        return ['Standings (Match points / OMW% / GW% / OGW%):', standings];
+
+      }else return 'I have no tournaments running right now.';
+    },
 
     checkin() {
       if (this.state === 'not_running') {
@@ -125,19 +146,7 @@ function Tournament() {
     },
 
     outputPairings(round) {
-      let output = [];
-      let table = 0;
-      while(table < this.rounds[round].pairings.length) {
-        let row = `Table ${table + 1}: `
-        if (this.rounds[round].pairings[table].bye) {
-          row = row + `${this.rounds[round].pairings[table].players.values().next().value.player.data} -- BYE`;
-        } else {
-          row = row + Array.from(this.rounds[round].pairings[table].players, ([key, pairingData]) => pairingData.player.data).join(' vs ');
-        }
-        output.push(row);
-        table = table + 1;
-      }
-      return output;
+      return this.rounds[round].pairings.map((pairing, table) => `Table ${table + 1}: ${pairing}`);
     },
 
     submitResult(playerData, win = 2, loss = 0, draw = 0) {
@@ -199,8 +208,8 @@ function Tournament() {
       return this.rounds[this.currentRound].pairings.find((pairing) => pairing.players.has(playerData.id));
     },
 
-    updateScore(participant, gameWins, gameDraws, matchWins, matchDraws) {
-      participant.player.metadata.played.games = participant.player.metadata.played.games + gameWins + gameDraws;
+    updateScore(participant, gameWins, gameLosses, gameDraws, matchWins, matchDraws) {
+      participant.player.metadata.played.games = participant.player.metadata.played.games + gameWins + gameDraws + gameLosses;
       participant.player.metadata.points.game = participant.player.metadata.points.game + (gameWins * 3) + gameDraws;
       participant.player.metadata.points.match = participant.player.metadata.points.match + (matchWins * 3) + matchDraws;
     },
@@ -210,13 +219,13 @@ function Tournament() {
       const players = pairing.players.values();
       const p1 = players.next().value;
       if (pairing.bye) {
-        this.updateScore(p1, 2, 0, 1, 0);
+        this.updateScore(p1, 2, 0, 0, 1, 0);
         return;
       }
 
       const p2 = pairing.players.get(p1.opponent.data.id);
-      this.updateScore(p1, p1.wins, pairing.draws, p1.wins > p2.wins ? 1 : 0, p1.wins === p2.wins ? 1 : 0);
-      this.updateScore(p2, p2.wins, pairing.draws, p2.wins > p1.wins ? 1 : 0, p2.wins === p1.wins ? 1 : 0);
+      this.updateScore(p1, p1.wins, p2.wins, pairing.draws, p1.wins > p2.wins ? 1 : 0, p1.wins === p2.wins ? 1 : 0);
+      this.updateScore(p2, p2.wins, p1.wins, pairing.draws, p2.wins > p1.wins ? 1 : 0, p2.wins === p1.wins ? 1 : 0);
     },
 
     resetTournament() {
@@ -227,6 +236,12 @@ function Tournament() {
     },
 
     nextRound() {
+      // check if all results are done.
+      const unconfirmedResults = this.rounds[this.currentRound].pairings.filter((p) => p.state === 'unconfirmed');
+      if (unconfirmedResults.length > 0) {
+        return ['Error, There are still unconfirmed results', unconfirmedResults.map((pairing) => pairing.toString())];
+      }
+
       // gather results
       this.rounds[this.currentRound].pairings.forEach((p) => this.updateScores(p));
 
@@ -242,16 +257,9 @@ function Tournament() {
 
       // increment round
       if (this.currentRound + 1 >= this.rounds.length) {
-        const standings = this.sortPlayers(this.tiebreakers).map((p, i) => {
-          const medal = [': 🥇', ': 🥈', ': 🥉'];
-          return `#${i+1}${i < medal.length ? medal[i] : ''}`+
-            ` - (${p.data} - ${p.metadata.points.match} / `+
-            `${(p.metadata.percentage.match.opponent * 100).toFixed(2)}% / `+
-            `${(p.metadata.percentage.game.self * 100).toFixed(2)}% / `+
-            `${(p.metadata.percentage.game.opponent * 100).toFixed(2)}%)`;
-        })
+        const [header, standings] = this.standings();
         this.resetTournament();
-        return ['Tournament is over!\nFinal Standings (Match points / OMW% / GW% / OGW%):', standings];
+        return ['Tournament is over!\nFinal ' + header, standings];
       }
       this.currentRound = this.currentRound + 1;
 
