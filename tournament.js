@@ -317,4 +317,6 @@ function Tournament() {
 // Game-win percentage
 // Opponents’ game-win percentage
 
-export default Tournament;
+//export default Tournament;
+
+module.exports = Tournament;

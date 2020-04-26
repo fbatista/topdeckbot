@@ -1,6 +1,6 @@
-import * as fs from 'fs';
-import Discord from 'discord.js';
-import Tournament from './tournament.js';
+const fs = require('fs');
+const Discord = require('discord.js');
+const Tournament = require('./tournament.js');
 
 const client = new Discord.Client();
 const config = {};
